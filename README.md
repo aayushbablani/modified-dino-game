@@ -1,8 +1,5 @@
 # Modified Dino Game ⚡️
 
-![GitHub release](https://img.shields.io/github/v/release/USERNAME/modified-dino-game)
-![License](https://img.shields.io/github/license/USERNAME/modified-dino-game)
-
 **An offline T‑Rex runner with enhanced mechanics**: triple-jump, dynamic obstacle spacing, and collectible sparkling stars.
 
 ## 🎮 Features
