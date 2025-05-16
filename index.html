@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Modified Dino Game</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: sans-serif;
+      background: #f7f7f7;
+      height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    canvas {
+      border: 2px solid #333;
+      background: #fff;
+    }
+    #score {
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 20px;
+    }
+    #menu {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+    }
+    #menu button {
+      padding: 10px 20px;
+      margin: 10px;
+      font-size: 18px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    #startBtn {
+      background: #4CAF50;
+      color: white;
+    }
+    #replayBtn {
+      background: #2196F3;
+      color: white;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="score">Score: 0</div>
+  <canvas id="gameCanvas" width="800" height="200"></canvas>
+  <div id="menu">
+    <button id="startBtn">Start Game</button>
+    <button id="replayBtn">Replay</button>
+  </div>
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const scoreEl = document.getElementById('score');
+    const menu = document.getElementById('menu');
+    const startBtn = document.getElementById('startBtn');
+    const replayBtn = document.getElementById('replayBtn');
+
+    // Difficulty settings
+    const baseSpeed = 3.5;
+    const speedIncrementInterval = 500;
+    const speedIncrementAmount = 0.5;
+    const baseSpawnInterval = 120;
+    const minSpawnInterval = 60;
+
+    let gameSpeed, gravity, gameOver, score, frameCount;
+    let obstacles, powerUps;
+    let gameRunning = false;
+
+    const character = {
+      x: 50,
+      baseY: canvas.height - 50,
+      y: canvas.height - 50,
+      width: 40,
+      height: 40,
+      dy: 0,
+      jumpForce: 13,
+      jumpCount: 0,
+      maxJumps: 3,
+      draw() {
+        ctx.save();
+        ctx.translate(this.x + this.width / 2, this.y + this.height / 2);
+        ctx.scale(-1, 1);
+        ctx.font = this.width + 'px serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('🦖', 0, this.height / 2);
+        ctx.restore();
+      },
+      update() {
+        if (this.y < this.baseY || this.dy > 0) {
+          this.dy -= gravity;
+          this.y -= this.dy;
+          if (this.y >= this.baseY) {
+            this.y = this.baseY;
+            this.dy = 0;
+            this.jumpCount = 0;
+          }
+        } else {
+          this.y = this.baseY + Math.sin(frameCount * 0.3) * 3;
+        }
+        this.draw();
+      },
+      jump() {
+        if (this.jumpCount < this.maxJumps) {
+          this.dy = this.jumpForce;
+          this.jumpCount++;
+        }
+      }
+    };
+
+    class Obstacle {
+      constructor() {
+        this.width = 20 + Math.random() * 20;
+        this.height = 20 + Math.random() * 30;
+        this.x = canvas.width;
+        this.y = canvas.height - this.height - 10;
+      }
+      draw() {
+        ctx.fillStyle = '#333';
+        ctx.fillRect(this.x, this.y, this.width, this.height);
+      }
+      update() {
+        this.x -= gameSpeed;
+        this.draw();
+      }
+    }
+
+    class PowerUp {
+      constructor() {
+        this.size = 20;
+        this.x = canvas.width;
+        this.y = canvas.height - this.size - 80 - Math.random() * 50;
+        this.pulsePhase = Math.random() * Math.PI * 2;
+      }
+      drawStar(cx, cy, spikes, outerR, innerR) {
+        let rot = Math.PI / 2 * 3;
+        let step = Math.PI / spikes;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy - outerR);
+        for (let i = 0; i < spikes; i++) {
+          ctx.lineTo(cx + Math.cos(rot) * outerR, cy + Math.sin(rot) * outerR);
+          rot += step;
+          ctx.lineTo(cx + Math.cos(rot) * innerR, cy + Math.sin(rot) * innerR);
+          rot += step;
+        }
+        ctx.closePath();
+        ctx.fill();
+      }
+      draw() {
+        const cx = this.x + this.size / 2;
+        const cy = this.y + this.size / 2;
+        const scale = 1 + 0.3 * Math.sin(frameCount * 0.2 + this.pulsePhase);
+        const angle = (frameCount * 0.02) % (Math.PI * 2);
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(angle);
+        ctx.scale(scale, scale);
+        ctx.translate(-cx, -cy);
+        ctx.fillStyle = '#FFD700';
+        this.drawStar(cx, cy, 5, this.size / 2, this.size / 4);
+        ctx.restore();
+      }
+      update() {
+        this.x -= gameSpeed;
+        this.draw();
+      }
+    }
+
+    function resetGame() {
+      gameSpeed = baseSpeed;
+      gravity = 1.18;
+      gameOver = false;
+      score = 0;
+      frameCount = 0;
+      obstacles = [];
+      powerUps = [];
+      character.y = character.baseY;
+      character.dy = 0;
+      character.jumpCount = 0;
+      scoreEl.textContent = 'Score: 0';
+    }
+
+    function startGame() {
+      resetGame();
+      startBtn.style.display = 'none';
+      replayBtn.style.display = 'none';
+      menu.style.display = 'none';
+      gameRunning = true;
+      animate();
+    }
+
+    function endGame() {
+      gameRunning = false;
+      replayBtn.style.display = 'block';
+      menu.style.display = 'flex';
+    }
+
+    function animate() {
+      if (!gameRunning) return;
+      requestAnimationFrame(animate);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      gameSpeed = baseSpeed + Math.floor(frameCount / speedIncrementInterval) * speedIncrementAmount;
+      const spawnInterval = Math.max(
+        minSpawnInterval,
+        baseSpawnInterval - Math.floor(frameCount / speedIncrementInterval) * 10
+      );
+
+      if (frameCount % spawnInterval === 0) obstacles.push(new Obstacle());
+      if (frameCount % 300 === 0) powerUps.push(new PowerUp());
+
+      character.update();
+
+      obstacles.forEach((obs, i) => {
+        obs.update();
+        if (
+          character.x < obs.x + obs.width &&
+          character.x + character.width > obs.x &&
+          character.y < obs.y + obs.height &&
+          character.y + character.height > obs.y
+        ) {
+          gameOver = true;
+          endGame();
+        }
+        if (obs.x + obs.width < 0) obstacles.splice(i, 1);
+      });
+
+      powerUps.forEach((pu, i) => {
+        pu.update();
+        if (
+          character.x < pu.x + pu.size &&
+          character.x + character.width > pu.x &&
+          character.y < pu.y + pu.size &&
+          character.y + character.height > pu.y
+        ) {
+          score += 50;
+          powerUps.splice(i, 1);
+        }
+        if (pu.x + pu.size < 0) powerUps.splice(i, 1);
+      });
+
+      score += 1;
+      scoreEl.textContent = 'Score: ' + score;
+      frameCount++;
+    }
+
+    window.addEventListener('keydown', (e) => {
+      if (!gameRunning) return;
+      if (e.code === 'Space' || e.code === 'ArrowUp') character.jump();
+    });
+
+    startBtn.addEventListener('click', startGame);
+    replayBtn.addEventListener('click', startGame);
+  </script>
+</body>
+</html>
